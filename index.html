@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arrivia Cruise API Specs</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/@stoplight/elements/web-components.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/@stoplight/elements/styles.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #0f1117;
+      color: #e1e4e8;
+    }
+
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.75rem 1.5rem;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      backdrop-filter: blur(8px);
+    }
+
+    .nav h1 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #f0f6fc;
+      white-space: nowrap;
+    }
+
+    .nav-tabs {
+      display: flex;
+      gap: 0.25rem;
+      margin-left: 1.5rem;
+    }
+
+    .nav-tab {
+      padding: 0.5rem 1rem;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      background: transparent;
+      color: #8b949e;
+      font-family: inherit;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .nav-tab:hover { color: #e1e4e8; background: #21262d; }
+    .nav-tab.active { color: #f0f6fc; background: #30363d; border-color: #484f58; }
+
+    .spec-container { display: none; height: calc(100vh - 53px); }
+    .spec-container.active { display: block; }
+
+    elements-api {
+      --color-canvas-100: #0d1117;
+      --color-canvas-200: #161b22;
+      --color-canvas-300: #21262d;
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <h1>Arrivia Cruise APIs</h1>
+    <div class="nav-tabs">
+      <button class="nav-tab active" data-spec="web">Cruise WebApi (.NET BFF)</button>
+      <button class="nav-tab" data-spec="core">Cruise Core (Java Backend)</button>
+    </div>
+  </nav>
+
+  <div id="spec-web" class="spec-container active">
+    <elements-api
+      apiDescriptionUrl="openapi-cruise-web.yaml"
+      router="hash"
+      layout="sidebar"
+      tryItCredentialsPolicy="same-origin"
+    />
+  </div>
+
+  <div id="spec-core" class="spec-container">
+    <elements-api
+      apiDescriptionUrl="openapi-cruise-core.yaml"
+      router="hash"
+      layout="sidebar"
+      tryItCredentialsPolicy="same-origin"
+    />
+  </div>
+
+  <script>
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.spec-container').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('spec-' + tab.dataset.spec).classList.add('active');
+      });
+    });
+  </script>
+</body>
+</html>

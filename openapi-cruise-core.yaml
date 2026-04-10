@@ -1,0 +1,1888 @@
+openapi: 3.0.3
+info:
+  title: Arrivia Cruise Core API
+  description: >
+    Java servlet-based backend API powering the Arrivia Cruise booking platform.
+    Handles cruise search, booking flow (details → category → cabin → guest → payment → confirm),
+    content lookups, Amex integration, booking servicing, and health checks.
+    Deployed as a WAR on Tomcat. Most endpoints accept both GET and POST with
+    query parameters or JSON payload (via CigWebUtils helpers).
+  version: 1.0.0
+  contact:
+    name: Arrivia Engineering
+
+servers:
+  - url: https://{host}/{context}
+    variables:
+      host:
+        default: localhost:8080
+      context:
+        default: cruise-core
+
+tags:
+  - name: Search
+    description: Cruise search and search matrix
+  - name: Details
+    description: Cruise detail and itinerary
+  - name: Category
+    description: Cabin categories
+  - name: Cabin
+    description: Cabin selection and hold
+  - name: Payment
+    description: Charge, payment processing, confirmation
+  - name: Quote
+    description: Email quote
+  - name: Content
+    description: Static content (cruise lines, ships, ports, fare codes)
+  - name: Member
+    description: Member and customer info
+  - name: Features
+    description: Features, options, insurance
+  - name: Cobrand
+    description: Cobrand configuration
+  - name: Amex
+    description: American Express integration
+  - name: Servicing
+    description: Post-booking servicing (display, cancel, receipt)
+  - name: Validation
+    description: Address, passenger, third-party validation
+  - name: Health
+    description: Health and monitoring
+  - name: Utility
+    description: Static lists, URLs, access tokens
+
+paths:
+  # ── Search ────────────────────────────────────────────────────────────
+  /servlet/cruisesearch:
+    get:
+      operationId: cruiseSearch
+      tags: [Search]
+      summary: Cruise search (session-based)
+      parameters:
+        - $ref: '#/components/parameters/cobrandrecno'
+        - $ref: '#/components/parameters/pin'
+        - $ref: '#/components/parameters/customerid'
+        - {name: application, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Search response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CruiseSearchResponseData'
+
+  /servlet/searchresults:
+    get:
+      operationId: searchResults
+      tags: [Search]
+      summary: Paginated search results with cabin pricing
+      parameters:
+        - $ref: '#/components/parameters/cobrandrecno'
+        - $ref: '#/components/parameters/pin'
+        - $ref: '#/components/parameters/customerid'
+        - {name: cruiselinelist, in: query, schema: {type: string}}
+        - {name: destinationlist, in: query, schema: {type: string}}
+        - {name: startdate, in: query, schema: {type: string}}
+        - {name: enddate, in: query, schema: {type: string}}
+        - {name: specificdate, in: query, schema: {type: string}}
+        - {name: shipid, in: query, schema: {type: string}}
+        - {name: departureportid, in: query, schema: {type: string}}
+        - {name: durationstart, in: query, schema: {type: string}}
+        - {name: durationend, in: query, schema: {type: string}}
+        - {name: specialofferid, in: query, schema: {type: string}}
+        - {name: primarysort, in: query, schema: {type: string}}
+        - {name: primarysortorder, in: query, schema: {type: string}}
+        - {name: secondarysort, in: query, schema: {type: string}}
+        - {name: secondarysortorder, in: query, schema: {type: string}}
+        - {name: numberofrecords, in: query, schema: {type: integer}}
+        - {name: offset, in: query, schema: {type: string}}
+        - {name: language, in: query, schema: {type: integer}}
+        - {name: store, in: query, schema: {type: string}}
+        - {name: certrec, in: query, schema: {type: string}}
+        - {name: thirdpartyid, in: query, schema: {type: string}}
+        - {name: isguest, in: query, schema: {type: string}}
+        - {name: isdri, in: query, schema: {type: string}}
+        - {name: displaytype, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Search results with cabin pricing
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /servlet/searchmatrix:
+    get:
+      operationId: searchMatrix
+      tags: [Search]
+      summary: Dynamic search matrix (full)
+      parameters:
+        - $ref: '#/components/parameters/cobrandrecno'
+        - $ref: '#/components/parameters/pin'
+        - {name: application, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Search matrix data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DynamicSearchResponseData'
+        '403':
+          description: Unauthorized role
+
+  /servlet/searchmatrixcontent:
+    get:
+      operationId: searchMatrixContent
+      tags: [Search]
+      summary: Search matrix with content (names for cruise lines, destinations, etc.)
+      parameters:
+        - $ref: '#/components/parameters/cobrandrecno'
+        - $ref: '#/components/parameters/pin'
+        - {name: application, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Matrix content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DynamicSearchResponseData'
+
+  /servlet/searchmatrixlite:
+    get:
+      operationId: searchMatrixLite
+      tags: [Search]
+      summary: Lightweight search matrix
+      parameters:
+        - $ref: '#/components/parameters/cobrandrecno'
+        - $ref: '#/components/parameters/pin'
+        - {name: application, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Lite matrix
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DynamicSearchResponseData'
+
+  /servlet/searchmatrixmin:
+    get:
+      operationId: searchMatrixMin
+      tags: [Search]
+      summary: Minimal search matrix
+      parameters:
+        - $ref: '#/components/parameters/cobrandrecno'
+        - $ref: '#/components/parameters/pin'
+        - {name: application, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Minimal matrix
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DynamicSearchResponseData'
+
+  /servlet/searchbox:
+    get:
+      operationId: searchBox
+      tags: [Search]
+      summary: Search box configuration
+      parameters:
+        - $ref: '#/components/parameters/cobrandrecno'
+        - $ref: '#/components/parameters/pin'
+        - {name: application, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Search box config
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /servlet/destinations:
+    get:
+      operationId: getDestinations
+      tags: [Search]
+      summary: Get destination list
+      parameters:
+        - $ref: '#/components/parameters/cobrandrecno'
+        - {name: languageRecno, in: query, schema: {type: integer}}
+        - {name: fromapplication, in: query, schema: {type: string}}
+        - {name: storeRecno, in: query, schema: {type: string}}
+        - {name: certificate, in: query, schema: {type: string}}
+        - {name: authCode, in: query, schema: {type: string}}
+        - {name: parentDestination, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Destination tree
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  /servlet/featuredsearches:
+    get:
+      operationId: featuredSearches
+      tags: [Search]
+      summary: Featured/marketing searches
+      parameters:
+        - $ref: '#/components/parameters/cobrandrecno'
+      responses:
+        '200':
+          description: Featured searches
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeaturedSearchesResponseData'
+
+  # ── Details & Itinerary ───────────────────────────────────────────────
+  /servlet/cruisedetail:
+    get:
+      operationId: cruiseDetail
+      tags: [Details]
+      summary: Get cruise sailing detail
+      parameters:
+        - $ref: '#/components/parameters/cobrandrecno'
+        - $ref: '#/components/parameters/pin'
+        - $ref: '#/components/parameters/customerid'
+        - {name: recno, in: query, schema: {type: string}, description: Sailing/special recno}
+        - {name: adults, in: query, schema: {type: integer, default: 2}}
+        - {name: seniors, in: query, schema: {type: integer, default: 0}}
+        - {name: children, in: query, schema: {type: integer, default: 0}}
+        - {name: infants, in: query, schema: {type: integer, default: 0}}
+        - {name: language, in: query, schema: {type: integer, default: 1}}
+        - {name: airport, in: query, schema: {type: string}}
+        - {name: certrec, in: query, schema: {type: string}}
+        - {name: amexrecno, in: query, schema: {type: string}}
+        - {name: isgalileo, in: query, schema: {type: string}}
+        - {name: usegds, in: query, schema: {type: string}}
+        - {name: category, in: query, schema: {type: string}}
+        - {name: thirdpartyid, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Cruise detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SelectCruiseSpecialResponseData'
+    post:
+      operationId: cruiseDetailPost
+      tags: [Details]
+      summary: Get cruise detail (DRI/POST payload)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Key-value payload mapped via RequestMapper
+      responses:
+        '200':
+          description: Cruise detail
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /servlet/cruiseitinerary:
+    get:
+      operationId: cruiseItinerary
+      tags: [Details]
+      summary: Get cruise itinerary
+      parameters:
+        - $ref: '#/components/parameters/cobrandrecno'
+        - $ref: '#/components/parameters/customerid'
+        - {name: sid, in: query, schema: {type: string}, description: Sailing/special recno}
+      responses:
+        '200':
+          description: Itinerary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CruiseItineraryResponseData'
+        '403':
+          description: Unauthorized
+
+  /servlet/cruiseitinerarypricing:
+    get:
+      operationId: cruiseItineraryPricing
+      tags: [Details]
+      summary: Get itinerary with pricing
+      parameters:
+        - {name: sid, in: query, schema: {type: string}}
+        - {name: sailingrecno, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Itinerary with pricing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CruiseItineraryResponseData'
+
+  # ── Category ──────────────────────────────────────────────────────────
+  /servlet/cruisecategory:
+    get:
+      operationId: cruiseCategory
+      tags: [Category]
+      summary: Get cabin categories
+      parameters:
+        - {name: gdsrequest, in: query, schema: {type: string}}
+        - {name: gdsresponse, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Categories
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CruiseCategoryResponseData'
+            text/xml:
+              schema:
+                type: string
+                description: GDS debug XML when gdsrequest/gdsresponse provided
+
+  # ── Cabin ─────────────────────────────────────────────────────────────
+  /servlet/cruisecabin:
+    get:
+      operationId: cruiseCabin
+      tags: [Cabin]
+      summary: Get cabin list for selected category
+      parameters:
+        - {name: gdsrequest, in: query, schema: {type: string}}
+        - {name: gdsresponse, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Cabins
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CruiseCabinsResponseData'
+
+  /servlet/cruisecabincontent:
+    get:
+      operationId: cruiseCabinContent
+      tags: [Cabin]
+      summary: Get cabin content and deck plans
+      responses:
+        '200':
+          description: Cabin content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CruiseCabinContentResponseData'
+
+  /servlet/cruisecabinonhold:
+    post:
+      operationId: cruiseCabinOnHold
+      tags: [Cabin]
+      summary: Place cabin on hold
+      responses:
+        '200':
+          description: Hold result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CruiseCabinOnHoldResponseData'
+
+  # ── Payment ───────────────────────────────────────────────────────────
+  /servlet/cruisecharge:
+    get:
+      operationId: cruiseCharge
+      tags: [Payment]
+      summary: Get payment/charge info for booking session
+      parameters:
+        - {name: gdsrequest, in: query, schema: {type: string}}
+        - {name: gdsresponse, in: query, schema: {type: string}}
+        - {name: insurance, in: query, schema: {type: string}}
+        - {name: cruiserec, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Charge info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CruiseChargeResponseData'
+
+  /servlet/cruisechargeproc:
+    post:
+      operationId: cruiseChargeProc
+      tags: [Payment]
+      summary: Process payment charge
+      responses:
+        '200':
+          description: Charge processing result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CruiseChargeProcResponseData'
+
+  /servlet/cruisepayment:
+    get:
+      operationId: cruisePayment
+      tags: [Payment]
+      summary: Get payment info (alias for cruisecharge)
+      parameters:
+        - {name: gdsrequest, in: query, schema: {type: string}}
+        - {name: gdsresponse, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Payment info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CruiseChargeResponseData'
+
+  /servlet/cruisepaymentproc:
+    post:
+      operationId: cruisePaymentProc
+      tags: [Payment]
+      summary: Process payment (alias for cruisechargeproc)
+      responses:
+        '200':
+          description: Payment processing result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CruiseChargeProcResponseData'
+
+  /servlet/cruiseconfirm:
+    post:
+      operationId: cruiseConfirm
+      tags: [Payment]
+      summary: Confirm booking
+      responses:
+        '200':
+          description: Booking confirmation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CruiseConfirmResponseData'
+
+  /servlet/paymentschedule:
+    get:
+      operationId: paymentSchedule
+      tags: [Payment]
+      summary: Calculate payment schedule
+      parameters:
+        - {name: refundable, in: query, schema: {type: boolean}}
+        - {name: wantsinsurance, in: query, schema: {type: boolean}}
+        - {name: totalpassengercharges, in: query, schema: {type: number, format: double}}
+        - {name: totalcost, in: query, schema: {type: number, format: double}}
+        - {name: finalpaymentamount, in: query, schema: {type: number, format: double}}
+        - {name: depositamount, in: query, schema: {type: number, format: double}}
+        - {name: pointsvalue, in: query, schema: {type: number, format: double}}
+        - {name: insuranceamount, in: query, schema: {type: number, format: double}}
+        - {name: savingsamount, in: query, schema: {type: number, format: double}}
+        - $ref: '#/components/parameters/cobrandrecno'
+        - $ref: '#/components/parameters/pin'
+        - {name: depositdate, in: query, schema: {type: string}}
+        - {name: finalpaymentdate, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Payment schedule
+          content:
+            text/json:
+              schema:
+                type: object
+
+  # ── Quote ─────────────────────────────────────────────────────────────
+  /servlet/emailquote/v1/{action}:
+    post:
+      operationId: emailQuote
+      tags: [Quote]
+      summary: Send email quote (agent or consumer)
+      parameters:
+        - name: action
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [send, search, cabin]
+      responses:
+        '200':
+          description: Quote sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CruiseQuoteResponseData'
+
+  # ── Content ───────────────────────────────────────────────────────────
+  /content/cruiseline:
+    get:
+      operationId: getCruiseLine
+      tags: [Content]
+      summary: Get cruise line details
+      parameters:
+        - {name: recno, in: query, schema: {type: integer}}
+      responses:
+        '200':
+          description: Cruise line
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CruiseLineResponseData'
+
+  /content/ship:
+    get:
+      operationId: getShipContent
+      tags: [Content]
+      summary: Get ship details
+      parameters:
+        - {name: recno, in: query, schema: {type: integer}}
+      responses:
+        '200':
+          description: Ship
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShipResponseData'
+
+  /servlet/ship:
+    get:
+      operationId: getShipServlet
+      tags: [Content]
+      summary: Get ship details (servlet path)
+      parameters:
+        - {name: recno, in: query, schema: {type: integer}}
+      responses:
+        '200':
+          description: Ship
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShipResponseData'
+
+  /content/port:
+    get:
+      operationId: getPort
+      tags: [Content]
+      summary: Get port details
+      parameters:
+        - {name: recno, in: query, schema: {type: integer}}
+      responses:
+        '200':
+          description: Port
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortResponseData'
+
+  /content/farecode:
+    get:
+      operationId: getFareCode
+      tags: [Content]
+      summary: Get fare code details
+      parameters:
+        - {name: code, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Fare code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FareCodeResponseData'
+
+  # ── Member ────────────────────────────────────────────────────────────
+  /servlet/member:
+    get:
+      operationId: memberDetails
+      tags: [Member]
+      summary: Get member details
+      parameters:
+        - $ref: '#/components/parameters/cobrandrecno'
+        - $ref: '#/components/parameters/customerid'
+        - $ref: '#/components/parameters/pin'
+        - {name: nameid, in: query, schema: {type: string}}
+        - {name: thirdpartyid, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Member details
+          content:
+            text/plain:
+              schema:
+                type: string
+    put:
+      operationId: memberUpdate
+      tags: [Member]
+      summary: Update member (guest cert/auth)
+      parameters:
+        - {name: guestcert, in: query, schema: {type: string}}
+        - {name: guestauth, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Updated
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /servlet/memberinfo:
+    get:
+      operationId: memberInfo
+      tags: [Member]
+      summary: Get member info (DRI points etc.)
+      responses:
+        '200':
+          description: Member info JSON
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /servlet/getcustomerid:
+    get:
+      operationId: getCustomerId
+      tags: [Member]
+      summary: Get customer ID for session
+      parameters:
+        - $ref: '#/components/parameters/cobrandrecno'
+        - $ref: '#/components/parameters/customerid'
+      responses:
+        '200':
+          description: Customer ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerIdResponseData'
+
+  # ── Features & Options ────────────────────────────────────────────────
+  /servlet/featuresandoptions:
+    get:
+      operationId: featuresAndOptions
+      tags: [Features]
+      summary: Get features and options (dining, services)
+      parameters:
+        - {name: cruiseSessionRecno, in: query, schema: {type: string}}
+        - $ref: '#/components/parameters/cobrandrecno'
+        - {name: ratecode, in: query, schema: {type: string}}
+        - {name: paxcount, in: query, schema: {type: integer}}
+        - {name: confirmationnumber, in: query, schema: {type: string}}
+        - {name: sid, in: query, schema: {type: string}}
+        - {name: categorycode, in: query, schema: {type: string}}
+        - {name: cabinnumber, in: query, schema: {type: string}}
+        - {name: upgradecode, in: query, schema: {type: string}}
+        - {name: sailingdate, in: query, schema: {type: string}}
+        - {name: sailingduration, in: query, schema: {type: string}}
+        - {name: aircity, in: query, schema: {type: string}}
+        - {name: shipcode, in: query, schema: {type: string}}
+        - {name: shiprecno, in: query, schema: {type: string}}
+        - {name: gdsrecno, in: query, schema: {type: string}}
+        - {name: cruiselinecode, in: query, schema: {type: string}}
+        - {name: cruiselinerecno, in: query, schema: {type: string}}
+        - {name: currencyrecno, in: query, schema: {type: string}}
+        - {name: langrecno, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Features and options
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /servlet/insurance:
+    get:
+      operationId: insurance
+      tags: [Features]
+      summary: Get insurance options
+      responses:
+        '200':
+          description: Insurance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsuranceResponse'
+
+  # ── Cobrand ───────────────────────────────────────────────────────────
+  /servlet/cobrand:
+    get:
+      operationId: getCobrand
+      tags: [Cobrand]
+      summary: Get cobrand configuration
+      parameters:
+        - $ref: '#/components/parameters/cobrandrecno'
+        - $ref: '#/components/parameters/pin'
+        - $ref: '#/components/parameters/customerid'
+        - {name: application, in: query, schema: {type: string}}
+        - {name: cruiseuiurl, in: query, schema: {type: string}}
+        - {name: store, in: query, schema: {type: string}}
+        - {name: forcereload, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Cobrand data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CobrandResponseData'
+
+  # ── Utility ───────────────────────────────────────────────────────────
+  /servlet/staticlists:
+    get:
+      operationId: staticLists
+      tags: [Utility]
+      summary: Get static reference lists
+      parameters:
+        - {name: language, in: query, schema: {type: integer}}
+      responses:
+        '200':
+          description: Static lists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaticListsResponseData'
+
+  /servlet/cruiseaccesstoken:
+    get:
+      operationId: cruiseAccessToken
+      tags: [Utility]
+      summary: Get cruise access token
+      responses:
+        '200':
+          description: Access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CruiseAccessTokenResponseData'
+
+  /servlet/cruiseuiurls:
+    get:
+      operationId: cruiseUiUrls
+      tags: [Utility]
+      summary: Get cruise UI URL list
+      responses:
+        '200':
+          description: URL list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CruiseUiUrlsResponseData'
+
+  # ── Amex ──────────────────────────────────────────────────────────────
+  /servlet/amex/GlobalCalculator:
+    get:
+      operationId: amexGlobalCalculator
+      tags: [Amex]
+      summary: Amex points/dollars calculator
+      parameters:
+        - {name: ccnumber, in: query, schema: {type: string}}
+        - {name: month, in: query, schema: {type: string}}
+        - {name: year, in: query, schema: {type: string}}
+        - {name: cid, in: query, schema: {type: string}}
+        - {name: zip, in: query, schema: {type: string}}
+        - {name: dobmonth, in: query, schema: {type: string}}
+        - {name: dobday, in: query, schema: {type: string}}
+        - {name: dobyear, in: query, schema: {type: string}}
+        - {name: points, in: query, schema: {type: string}}
+        - {name: dollars, in: query, schema: {type: string}}
+        - {name: cobrandrecno, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Calculator result
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /servlet/amex/calculatepayment:
+    get:
+      operationId: amexCalculatePayment
+      tags: [Amex]
+      summary: Amex payment calculation
+      parameters:
+        - {name: amexrecno, in: query, schema: {type: string}}
+        - {name: cardnumber, in: query, schema: {type: string}}
+        - {name: dollars, in: query, schema: {type: string}}
+        - {name: points, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Payment calculation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentCalculationResponseData'
+
+  /servlet/amex/validatecid:
+    get:
+      operationId: amexValidateCid
+      tags: [Amex]
+      summary: Validate Amex CID
+      parameters:
+        - {name: amexrecno, in: query, schema: {type: string}}
+        - {name: cardnumber, in: query, schema: {type: string}}
+        - {name: cid, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: CID validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CidValidationResponseData'
+
+  /servlet/amex/createcache:
+    post:
+      operationId: amexCreateCache
+      tags: [Amex]
+      summary: Create Amex session cache
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                SecToken: {type: string}
+                MRKey: {type: string}
+                TpGUID: {type: string}
+                MRPoints: {type: string}
+                MRTier: {type: string}
+                CardGroup: {type: string}
+                CardName: {type: string}
+      responses:
+        '200':
+          description: Cache created
+          content:
+            text/plain:
+              schema:
+                type: string
+                description: JSON with AmexCacheRecno
+
+  /servlet/amex/resetcache:
+    get:
+      operationId: amexResetCache
+      tags: [Amex]
+      summary: Reset Amex cache
+      parameters:
+        - {name: amexcacherecno, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Cache reset
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /servlet/amex/updatecacheexpiry:
+    get:
+      operationId: amexUpdateCacheExpiry
+      tags: [Amex]
+      summary: Keep Amex cache alive
+      parameters:
+        - {name: amexcacherecno, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Cache expiry updated
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  # ── Servicing ─────────────────────────────────────────────────────────
+  /servicing/bookingdisplay:
+    get:
+      operationId: bookingDisplay
+      tags: [Servicing]
+      summary: Display booking details
+      parameters:
+        - {name: cruisebookrecno, in: query, schema: {type: string}}
+        - {name: crbk, in: query, schema: {type: string}, description: Alias for cruisebookrecno}
+        - $ref: '#/components/parameters/customerid'
+        - {name: gdsrecno, in: query, schema: {type: string}}
+        - {name: pcc, in: query, schema: {type: string}}
+        - {name: gdsrequest, in: query, schema: {type: string}}
+        - {name: gdsresponse, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Booking display XML
+          content:
+            text/xml:
+              schema:
+                type: string
+
+  /servicing/bookingcancel:
+    post:
+      operationId: bookingCancel
+      tags: [Servicing]
+      summary: Cancel a booking
+      parameters:
+        - {name: cruisebookrecno, in: query, schema: {type: string}}
+        - {name: crbk, in: query, schema: {type: string}}
+        - $ref: '#/components/parameters/customerid'
+        - {name: cancelaction, in: query, schema: {type: string, default: P}}
+      responses:
+        '200':
+          description: Cancellation result
+          content:
+            text/xml:
+              schema:
+                type: string
+
+  /servicing/bookingpayment:
+    post:
+      operationId: bookingPayment
+      tags: [Servicing]
+      summary: Make post-booking payment
+      parameters:
+        - {name: cruisebookrecno, in: query, schema: {type: string}}
+        - {name: crbk, in: query, schema: {type: string}}
+        - {name: paymentrecno, in: query, schema: {type: string}}
+        - $ref: '#/components/parameters/customerid'
+        - {name: cvv, in: query, schema: {type: string}}
+        - {name: address1, in: query, schema: {type: string}}
+        - {name: ccexpdate, in: query, schema: {type: string}}
+        - {name: ccnameoncard, in: query, schema: {type: string}}
+        - {name: ccnumber, in: query, schema: {type: string}}
+        - {name: cctype, in: query, schema: {type: string}}
+        - {name: city, in: query, schema: {type: string}}
+        - {name: country, in: query, schema: {type: string}}
+        - {name: paymentamount, in: query, schema: {type: string}}
+        - {name: state, in: query, schema: {type: string}}
+        - {name: zip, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Payment result
+          content:
+            text/xml:
+              schema:
+                type: string
+
+  /servicing/bookingreceipt:
+    get:
+      operationId: bookingReceipt
+      tags: [Servicing]
+      summary: Send booking receipt email
+      parameters:
+        - {name: cruisebookrecno, in: query, schema: {type: string}}
+        - {name: crbk, in: query, schema: {type: string}}
+        - $ref: '#/components/parameters/customerid'
+        - {name: email, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Receipt sent
+          content:
+            text/xml:
+              schema:
+                type: string
+
+  /servicing/applypricingrules:
+    post:
+      operationId: applyPricingRules
+      tags: [Servicing]
+      summary: Apply pricing rules to bookings
+      parameters:
+        - $ref: '#/components/parameters/cobrandrecno'
+        - $ref: '#/components/parameters/pin'
+        - $ref: '#/components/parameters/customerid'
+        - {name: certrec, in: query, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/BookingApplyPricingRulesRequest'
+      responses:
+        '200':
+          description: Pricing rules applied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cruisePriceList:
+                    type: array
+                    items:
+                      type: object
+
+  # ── Validation ────────────────────────────────────────────────────────
+  /validation/addressvalidationrules:
+    get:
+      operationId: addressValidationRules
+      tags: [Validation]
+      summary: Get address validation rules
+      responses:
+        '200':
+          description: Address rules
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /validation/passengervalidationrules:
+    get:
+      operationId: passengerValidationRules
+      tags: [Validation]
+      summary: Get passenger validation rules
+      responses:
+        '200':
+          description: Passenger rules
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /validation/thirdpartyidvalidation:
+    get:
+      operationId: thirdPartyIdValidation
+      tags: [Validation]
+      summary: Validate third-party ID
+      parameters:
+        - {name: thirdpartyid, in: query, schema: {type: string}}
+        - $ref: '#/components/parameters/cobrandrecno'
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /validationservices/pastguestlookup:
+    post:
+      operationId: pastGuestLookup
+      tags: [Validation]
+      summary: Look up past guest by name/DOB
+      responses:
+        '200':
+          description: Past guest result
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /validationservices/pastpassengervalidation:
+    post:
+      operationId: pastPassengerValidation
+      tags: [Validation]
+      summary: Validate past passenger number
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                type: object
+
+  # ── Points Calculators ────────────────────────────────────────────────
+  /servlet/memberservices/CommonPointsCalculatorServlet:
+    get:
+      operationId: commonPointsCalculator
+      tags: [Member]
+      summary: Common points calculator
+      responses:
+        '200':
+          description: Points calculation
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /servlet/memberservices/MarriottPointsCalculatorServlet:
+    get:
+      operationId: marriottPointsCalculator
+      tags: [Member]
+      summary: Marriott points calculator
+      responses:
+        '200':
+          description: Points calculation
+          content:
+            application/json:
+              schema:
+                type: object
+
+  # ── Health & Monitoring ───────────────────────────────────────────────
+  /health:
+    get:
+      operationId: healthCheck
+      tags: [Health]
+      summary: Full health check
+      responses:
+        '200':
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformDependencyRoot'
+        '503':
+          description: Degraded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformDependencyRoot'
+
+  /health/live:
+    get:
+      operationId: healthLive
+      tags: [Health]
+      summary: Liveness probe
+      responses:
+        '200':
+          description: Alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformDependencyRoot'
+
+  /monitoring/dbup:
+    get:
+      operationId: monitoringDbUp
+      tags: [Health]
+      summary: Database connectivity check
+      responses:
+        '200':
+          description: DB status
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /monitoring/gdsup:
+    get:
+      operationId: monitoringGdsUp
+      tags: [Health]
+      summary: GDS connectivity check
+      responses:
+        '200':
+          description: GDS status
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  # ── CSP Logging ───────────────────────────────────────────────────────
+  /servlet/csp-logging:
+    post:
+      operationId: cspLogging
+      tags: [Utility]
+      summary: Receive CSP violation reports
+      requestBody:
+        content:
+          application/csp-report:
+            schema:
+              type: object
+              properties:
+                csp-report:
+                  type: object
+                  properties:
+                    document-uri: {type: string}
+                    referrer: {type: string}
+                    blocked-uri: {type: string}
+                    violated-directive: {type: string}
+                    original-policy: {type: string}
+      responses:
+        '204':
+          description: Report received
+
+components:
+  parameters:
+    cobrandrecno:
+      name: cobrandrecno
+      in: query
+      description: "Cobrand ID (aliases: cobrand, cobrandid)"
+      schema:
+        type: string
+    pin:
+      name: pin
+      in: query
+      description: "Affiliate PIN (alias: affiliatepin)"
+      schema:
+        type: string
+    customerid:
+      name: customerid
+      in: query
+      description: "Customer ID (alias: memberid)"
+      schema:
+        type: string
+
+  schemas:
+    # ── Response Data ─────────────────────────────────────────────────
+    Advisory:
+      type: object
+      properties:
+        code: {type: string}
+        description: {type: string}
+        errorText: {type: string}
+        exception: {type: string}
+
+    CruiseSearchResponseData:
+      type: object
+      properties:
+        cruiseSpecialList:
+          type: array
+          items:
+            type: object
+        advisoryList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Advisory'
+
+    DynamicSearchResponseData:
+      type: object
+      properties:
+        advisoryList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Advisory'
+        cruiseLineList:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListItem'
+        destinationList:
+          type: array
+          items:
+            $ref: '#/components/schemas/DestinationListItem'
+        sailingDateList:
+          type: array
+          items:
+            $ref: '#/components/schemas/SailingDateListItem'
+        departurePortList:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListItem'
+        durationList:
+          type: array
+          items:
+            $ref: '#/components/schemas/DurationListItem'
+        shipList:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListItem'
+        dynamicSearchList:
+          type: array
+          items:
+            $ref: '#/components/schemas/DynamicSearch'
+        dynamicSearchArray:
+          type: array
+          items:
+            type: array
+            items:
+              type: integer
+        dynamicSearchArrayDefinition:
+          type: array
+          items:
+            type: string
+
+    ListItem:
+      type: object
+      properties:
+        recno: {type: integer}
+        name: {type: string}
+        preferred: {type: boolean}
+
+    DestinationListItem:
+      type: object
+      properties:
+        recno: {type: integer}
+        name: {type: string}
+        preferred: {type: boolean}
+        childDestinationList:
+          type: array
+          items:
+            $ref: '#/components/schemas/DestinationListItem'
+
+    SailingDateListItem:
+      type: object
+      properties:
+        recno: {type: integer}
+        name: {type: string}
+        code: {type: string}
+
+    DurationListItem:
+      type: object
+      properties:
+        recno: {type: integer}
+        name: {type: string}
+        startDuration: {type: integer}
+        endDuration: {type: integer}
+
+    DynamicSearch:
+      type: object
+      properties:
+        childDestinationRecno: {type: integer}
+        cruiseLineRecno: {type: integer}
+        destinationRecno: {type: integer}
+        sailingDate: {type: integer}
+        departurePortRecno: {type: integer}
+        durationRecno: {type: integer}
+        shipRecno: {type: integer}
+
+    SelectCruiseSpecialResponseData:
+      type: object
+      properties:
+        NumberOfPassengers:
+          $ref: '#/components/schemas/NumberOfPassengers'
+        Sailing:
+          type: object
+        advisoryList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Advisory'
+        ItineraryDayList:
+          type: array
+          items:
+            type: object
+        Cobrand:
+          type: object
+        CabinCategoryList:
+          type: array
+          items:
+            type: object
+        PurchaseTypeInfoList:
+          type: array
+          items:
+            type: object
+        CabinCategoryNameList:
+          type: array
+          items:
+            type: object
+
+    NumberOfPassengers:
+      type: object
+      properties:
+        NumberOfAdults: {type: integer}
+        NumberOfChildren: {type: integer}
+        NumberOfInfants: {type: integer}
+        NumberOfSeniors: {type: integer}
+
+    CruiseItineraryResponseData:
+      type: object
+      properties:
+        useGds: {type: boolean}
+        cruiseSessionRecno: {type: integer}
+        gdsRecno: {type: integer}
+        cruiseSpecial:
+          type: object
+        advisoryList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Advisory'
+
+    CruiseCategoryResponseData:
+      type: object
+      properties:
+        bundleGovernmentFees: {type: boolean}
+        bundleNccf: {type: boolean}
+        useGds: {type: boolean}
+        cruiseSessionRecno: {type: integer}
+        currencyRecno: {type: integer}
+        gdsRecno: {type: integer}
+        categoryList:
+          type: array
+          items:
+            type: object
+        categoryGroupList:
+          type: array
+          items:
+            type: object
+        fareCodeContentList:
+          type: array
+          items:
+            type: object
+        advisoryList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Advisory'
+
+    CruiseCabinsResponseData:
+      type: object
+      properties:
+        useGds: {type: boolean}
+        cruiseSessionRecno: {type: integer}
+        gdsRecno: {type: integer}
+        cabinList:
+          type: array
+          items:
+            type: object
+        cabinTotalFare:
+          type: object
+        cabinPassengerFareList:
+          type: array
+          items:
+            type: object
+        categoryContent:
+          type: object
+        consumerLabelList:
+          type: array
+          items:
+            type: object
+        cubaTravel:
+          type: object
+        deckPlanList:
+          type: array
+          items:
+            type: object
+        specialOfferAmex:
+          type: object
+        specialOfferList:
+          type: array
+          items:
+            type: object
+        advisoryList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Advisory'
+
+    CruiseCabinContentResponseData:
+      type: object
+      properties:
+        cabinList:
+          type: array
+          items:
+            type: object
+        categoryContent:
+          type: object
+        deckPlanList:
+          type: array
+          items:
+            type: object
+        advisoryList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Advisory'
+
+    CruiseCabinOnHoldResponseData:
+      type: object
+      properties:
+        useGds: {type: boolean}
+        cruiseSessionRecno: {type: integer}
+        gdsRecno: {type: integer}
+        advisoryList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Advisory'
+
+    CruiseChargeResponseData:
+      type: object
+      properties:
+        useGds: {type: boolean}
+        requireCvv: {type: boolean}
+        canHoldReservation: {type: boolean}
+        cruiseSessionRecno: {type: integer}
+        gdsRecno: {type: integer}
+        creditCardTypeList:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreditCardType'
+        fullPaymentList:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentItem'
+        fullPaymentDetailsList:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentItem'
+        splitPaymentList:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentItem'
+        splitPaymentDetailsList:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentItem'
+        fullPointsPaymentList:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentItem'
+        fullPointsPaymentDetailsList:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentItem'
+        splitPointsPaymentList:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentItem'
+        splitPointsPaymentDetailsList:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentItem'
+        pointsPaymentInfo:
+          $ref: '#/components/schemas/PointsPaymentInfo'
+        vacationCashList:
+          type: array
+          items:
+            type: object
+        amexCustomerCardList:
+          type: array
+          items:
+            type: object
+        amexPaymentInfo:
+          type: object
+        advisoryList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Advisory'
+
+    CreditCardType:
+      type: object
+      properties:
+        id: {type: integer}
+        name: {type: string}
+        status: {type: boolean}
+
+    PaymentItem:
+      type: object
+      properties:
+        currencyId: {type: integer}
+        paymentAmount: {type: number, format: double}
+        owedTo: {type: string}
+        paymentDueDate: {type: string}
+        refundable: {type: boolean}
+        refundableUntilDate: {type: string}
+
+    PointsPaymentInfo:
+      type: object
+      properties:
+        points: {type: integer}
+        pointsBalance: {type: integer}
+        pointsValue: {type: number, format: double}
+        minPoints: {type: integer}
+        minPointsValue: {type: number, format: double}
+
+    CruiseChargeProcResponseData:
+      type: object
+      properties:
+        useGds: {type: boolean}
+        cruiseSessionRecno: {type: integer}
+        gdsRecno: {type: integer}
+        creditCard:
+          type: object
+          properties:
+            nameOnCard: {type: string}
+            cardNumberLastFour: {type: string}
+            cardExpirationDate: {type: string}
+            cardTypeId: {type: integer}
+            cardTypeName: {type: string}
+        advisoryList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Advisory'
+
+    CruiseConfirmResponseData:
+      type: object
+      properties:
+        useGds: {type: boolean}
+        cruiseSessionRecno: {type: integer}
+        cruiseBookRecno: {type: integer}
+        gdsRecno: {type: integer}
+        bookingNumber: {type: string}
+        isPointsRedemptionSuccessful: {type: boolean}
+        retryEligible: {type: boolean}
+        retryField: {type: string}
+        advisoryList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Advisory'
+
+    CruiseAccessTokenResponseData:
+      type: object
+      properties:
+        cruiseAccessToken: {type: string}
+        advisoryList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Advisory'
+
+    CruiseUiUrlsResponseData:
+      type: object
+      properties:
+        cruiseUiUrlList:
+          type: array
+          items:
+            type: object
+            properties:
+              url: {type: string}
+
+    CruiseQuoteResponseData:
+      type: object
+      properties:
+        documentId: {type: string}
+        advisoryList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Advisory'
+
+    FeaturedSearchesResponseData:
+      type: object
+      properties:
+        advisoryList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Advisory'
+        marketingBannerList:
+          type: array
+          items:
+            type: object
+
+    CobrandResponseData:
+      type: object
+      properties:
+        recno: {type: integer}
+        name: {type: string}
+        description: {type: string}
+        affiliateRecno: {type: integer}
+        affiliatePin: {type: string}
+        cruiseFulfillmentPhone: {type: string}
+        cruiseFulfillmentEmail: {type: string}
+        cruiseUiUrl: {type: string}
+        cruiseUrl: {type: string}
+        clubUrl: {type: string}
+        thirdPartyUrl: {type: string}
+        defaultNameId: {type: string}
+        languageRecno: {type: integer}
+        purchaseTerms: {type: string}
+        thirdPartyIdRegEx: {type: string}
+        gaTrackingId: {type: string}
+        googleTagManagerContainerId: {type: string}
+        cobrandOptionList:
+          type: array
+          items:
+            type: object
+        cobrandOptionByCruiseLineList:
+          type: array
+          items:
+            type: object
+        cobrandPurchaseTypeList:
+          type: array
+          items:
+            type: object
+        currencyFormatList:
+          type: array
+          items:
+            type: object
+        relatedCobrandList:
+          type: array
+          items:
+            type: object
+        advisoryList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Advisory'
+
+    StaticListsResponseData:
+      type: object
+      properties:
+        countryList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Country'
+        stateList:
+          type: array
+          items:
+            $ref: '#/components/schemas/State'
+        categoryGroupList:
+          type: array
+          items:
+            type: object
+        gdsList:
+          type: array
+          items:
+            type: object
+        imagePathList:
+          type: array
+          items:
+            type: object
+        titleList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Title'
+        genderList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Gender'
+
+    Country:
+      type: object
+      properties:
+        id: {type: integer}
+        name: {type: string}
+        abbreviation: {type: string}
+        countryCode: {type: string}
+
+    State:
+      type: object
+      properties:
+        id: {type: integer}
+        countryId: {type: integer}
+        name: {type: string}
+        abbreviation: {type: string}
+
+    Title:
+      type: object
+      properties:
+        id: {type: integer}
+        name: {type: string}
+
+    Gender:
+      type: object
+      properties:
+        id: {type: integer}
+        name: {type: string}
+
+    CustomerIdResponseData:
+      type: object
+      properties:
+        memberClassId: {type: string}
+        cultureCode: {type: string}
+        memberId: {type: string}
+        nameId: {type: string}
+        customerId: {type: string}
+        advisoryList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Advisory'
+
+    InsuranceResponse:
+      type: object
+      properties:
+        hasInsurance: {type: boolean}
+        insurancePrice: {type: number, format: double}
+        insuranceCost: {type: number, format: double}
+        insuranceText: {type: string}
+        insurancePriceText: {type: string}
+        insuranceProvider: {type: string}
+        insuranceDeclineText: {type: string}
+        insuranceMoreInfoText: {type: string}
+        insuranceRate: {type: string}
+        insuranceRateText: {type: string}
+        advisoryList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Advisory'
+
+    CruiseLineResponseData:
+      type: object
+      properties:
+        cruiseLine:
+          type: object
+        advisoryList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Advisory'
+
+    ShipResponseData:
+      type: object
+      properties:
+        ship:
+          type: object
+        advisoryList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Advisory'
+
+    PortResponseData:
+      type: object
+      properties:
+        port:
+          type: object
+        advisoryList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Advisory'
+
+    FareCodeResponseData:
+      type: object
+      properties:
+        fareCode:
+          type: object
+        advisoryList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Advisory'
+
+    # ── Amex Response DTOs ──────────────────────────────────────────────
+    PaymentCalculationResponseData:
+      type: object
+      properties:
+        amexCacheRecno: {type: integer}
+        dollars: {type: number, format: float}
+        points: {type: number, format: float}
+        advisoryList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Advisory'
+
+    CidValidationResponseData:
+      type: object
+      properties:
+        amexCacheRecno: {type: integer}
+        success: {type: boolean}
+        advisoryList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Advisory'
+
+    # ── Servicing Request DTOs ──────────────────────────────────────────
+    BookingApplyPricingRulesRequest:
+      type: object
+      properties:
+        SailingProperties:
+          $ref: '#/components/schemas/SailingProperties'
+        CruisePrice:
+          $ref: '#/components/schemas/CruisePrice'
+        memberProperties:
+          type: object
+
+    SailingProperties:
+      type: object
+      properties:
+        cruiseLineRecno: {type: string}
+        shipRecno: {type: string}
+        destinationRecno: {type: string}
+        departurePortRecno: {type: string}
+        duration: {type: string}
+        sailingRecno: {type: string}
+        bookingDate: {type: string}
+        sailingDate: {type: string}
+
+    CruisePrice:
+      type: object
+      properties:
+        categoryGroupRecno: {type: string}
+        fareCodeTypePrice: {type: string}
+        fareCodeTypeCost: {type: string}
+        certificateRedemptionFee: {type: number, format: double}
+        pointRedemptionFee: {type: number, format: double}
+        processingFee: {type: number, format: double}
+        passengerFareList:
+          type: array
+          items:
+            $ref: '#/components/schemas/PassengerFare'
+
+    PassengerFare:
+      type: object
+      properties:
+        passengerNumber: {type: integer}
+        cruiseFare: {type: number, format: double}
+        cost: {type: number, format: double}
+        nccf: {type: number, format: double}
+        nccfCost: {type: number, format: double}
+        governmentFees: {type: number, format: double}
+        governmentFeesCost: {type: number, format: double}
+        currencyRecno: {type: integer}
+
+    # ── Health ──────────────────────────────────────────────────────────
+    PlatformDependencyRoot:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [Healthy, Degraded, Unhealthy]
+        totalDuration:
+          type: string
+        entries:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/PlatformDependency'
+
+    PlatformDependency:
+      type: object
+      properties:
+        data:
+          type: object
+          additionalProperties: true
+        duration:
+          type: string
+        status:
+          type: string
+          enum: [Healthy, Degraded, Unhealthy]
+        tags:
+          type: array
+          items:
+            type: string
